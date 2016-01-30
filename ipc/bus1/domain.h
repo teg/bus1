@@ -17,6 +17,7 @@
  */
 
 #include <linux/atomic.h>
+#include <linux/idr.h>
 #include <linux/kernel.h>
 #include <linux/kref.h>
 #include <linux/mutex.h>
@@ -28,9 +29,11 @@
 
 /**
  * struct bus1_domain_info - domain specific runtime information
+ * @lock:		data lock
  * @ref:		references
  * @peer_ids:		counter for peer ID allocations
  * @seq_ids:		counter for transaction ID allocations
+ * @user_idr:		mapping from uids to bus1_user objects
  * @user_ns:		owning user namespace of this domain
  *
  * This object contains all runtime data of a domain, which is not required in
@@ -42,9 +45,11 @@
  * or holding a regular reference on the info object itself.
  */
 struct bus1_domain_info {
+	struct mutex lock;
 	struct kref ref;
 	u64 peer_ids;
 	atomic64_t seq_ids;
+	struct idr user_idr;
 	struct user_namespace *user_ns;
 };
 
@@ -87,5 +92,8 @@ struct bus1_domain *bus1_domain_free(struct bus1_domain *domain);
 void bus1_domain_teardown(struct bus1_domain *domain);
 struct bus1_domain *bus1_domain_acquire(struct bus1_domain *domain);
 struct bus1_domain *bus1_domain_release(struct bus1_domain *domain);
+
+struct bus1_domain_info *bus1_domain_info_ref(struct bus1_domain_info *info);
+struct bus1_domain_info *bus1_domain_info_unref(struct bus1_domain_info *info);
 
 #endif /* __BUS1_DOMAIN_H */
