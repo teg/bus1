@@ -32,6 +32,7 @@ static struct bus1_user *bus1_user_new(struct bus1_domain_info *domain_info,
 	kref_init(&u->ref);
 	u->domain_info = bus1_domain_info_ref(domain_info);
 	u->uid = uid;
+	u->id = 0;
 
 	return u;
 }
@@ -80,6 +81,12 @@ struct bus1_user *bus1_user_acquire(struct bus1_domain *domain, kuid_t uid)
 	if (IS_ERR(new_user))
 		return new_user;
 
+	/*
+	 * try to allocate some space in the ida to avoid doing so under the
+	 * lock. this is best effort only, so ignore any errors.
+	 */
+	(void) ida_pre_get(&domain->info->user_ida, GFP_KERNEL);
+
 	mutex_lock(&domain->info->lock);
 	/*
 	 * someone else might have raced us outside the lock, so check if the
@@ -119,6 +126,16 @@ struct bus1_user *bus1_user_acquire(struct bus1_domain *domain, kuid_t uid)
 		}
 	}
 
+	/*
+	 * allocate the smallest possible internal id for this user; used in
+	 * arrays for accounting user quota in receiver pools.
+	 */
+	r = ida_simple_get(&domain->info->user_ida, 1, 0, GFP_KERNEL);
+	if (r < 0)
+		goto exit;
+	else
+		new_user->id = r;
+
 	user = new_user;
 	new_user = NULL;
 
@@ -138,6 +155,8 @@ static void bus1_user_free(struct kref *ref)
 	struct bus1_user *user = container_of(ref, struct bus1_user, ref);
 
 	mutex_lock(&user->domain_info->lock);
+	/* drop the id from the ida, initialized ids are >= 0 */
+	ida_simple_remove(&user->domain_info->user_ida, user->id);
 	if (uid_valid(user->uid))
 		/* the user was not already replaced by another in the idr */
 		idr_remove(&user->domain_info->user_idr,
