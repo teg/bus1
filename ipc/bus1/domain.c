@@ -31,6 +31,7 @@ bus1_domain_info_new(struct user_namespace *user_ns)
 	if (!domain_info)
 		return ERR_PTR(-ENOMEM);
 
+	kref_init(&domain_info->ref);
 	domain_info->peer_ids = 0;
 	atomic64_set(&domain_info->seq_ids, 0);
 	domain_info->user_ns = get_user_ns(user_ns);
@@ -38,14 +39,20 @@ bus1_domain_info_new(struct user_namespace *user_ns)
 	return domain_info;
 }
 
-static struct bus1_domain_info *
-bus1_domain_info_free(struct bus1_domain_info *domain_info)
+static void bus1_domain_info_free(struct kref *ref)
 {
-	if (!domain_info)
-		return NULL;
+	struct bus1_domain_info *domain_info =
+				container_of(ref, struct bus1_domain_info, ref);
 
 	put_user_ns(domain_info->user_ns);
 	kfree(domain_info);
+}
+
+static struct bus1_domain_info *
+bus1_domain_info_unref(struct bus1_domain_info *domain_info)
+{
+	if (domain_info)
+		kref_put(&domain_info->ref, bus1_domain_info_free);
 
 	return NULL;
 }
@@ -131,7 +138,7 @@ static void bus1_domain_cleanup(struct bus1_active *active, void *userdata)
 	struct bus1_domain *domain = container_of(active, struct bus1_domain,
 						  active);
 
-	domain->info = bus1_domain_info_free(domain->info);
+	domain->info = bus1_domain_info_unref(domain->info);
 }
 
 /**

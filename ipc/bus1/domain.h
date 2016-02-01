@@ -18,6 +18,7 @@
 
 #include <linux/atomic.h>
 #include <linux/kernel.h>
+#include <linux/kref.h>
 #include <linux/mutex.h>
 #include <linux/rbtree.h>
 #include <linux/seqlock.h>
@@ -27,16 +28,21 @@
 
 /**
  * struct bus1_domain_info - domain specific runtime information
+ * @ref:		references
  * @peer_ids:		counter for peer ID allocations
  * @seq_ids:		counter for transaction ID allocations
  * @user_ns:		owning user namespace of this domain
  *
  * This object contains all runtime data of a domain, which is not required in
- * the handle object. That is, any data stored in this object will be
+ * the handle object. That is, any data stored in this object may be
  * deallocated as soon as a domain is torn down (even though there might still
  * be handles around).
+ *
+ * This object can be pinned by either holding an active reference on the domain
+ * or holding a regular reference on the info object itself.
  */
 struct bus1_domain_info {
+	struct kref ref;
 	u64 peer_ids;
 	atomic64_t seq_ids;
 	struct user_namespace *user_ns;
