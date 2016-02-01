@@ -1462,7 +1462,9 @@ static int bus1_peer_ioctl_send(struct bus1_peer *peer,
 			goto exit;
 		}
 
-		r = bus1_transaction_commit_for_id(transaction, destination,
+		r = bus1_transaction_commit_for_id(transaction,
+						   peer->info->user,
+						   destination,
 						   param.flags);
 		if (r < 0)
 			goto exit;
@@ -1474,8 +1476,9 @@ static int bus1_peer_ioctl_send(struct bus1_peer *peer,
 			}
 
 			r = bus1_transaction_instantiate_for_id(transaction,
-								destination,
-								param.flags);
+							peer->info->user,
+							destination,
+							param.flags);
 			if (r < 0)
 				goto exit;
 		}

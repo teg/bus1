@@ -110,6 +110,7 @@
 struct bus1_peer;
 struct bus1_pool_slice;
 struct bus1_queue_entry;
+struct bus1_user;
 struct file;
 
 /**
@@ -121,6 +122,7 @@ struct file;
  * @rb:				link into the queue
  * @rcu:			rcu-head
  * @slice:			carried data, or NULL
+ * @user:			the user this queue entry is accounted on
  * @n_files:			number of carried files
  * @files:			carried files, or NULL
  */
@@ -136,6 +138,7 @@ struct bus1_queue_entry {
 		struct rcu_head rcu;
 	};
 	struct bus1_pool_slice *slice;
+	struct bus1_user *user;
 	size_t n_files;
 	struct file *files[0];
 };
@@ -169,7 +172,8 @@ void bus1_queue_flush(struct bus1_queue *queue,
 		      u64 peer_id);
 struct bus1_queue_entry *bus1_queue_peek(struct bus1_queue *queue);
 
-struct bus1_queue_entry *bus1_queue_entry_new(size_t n_files);
+struct bus1_queue_entry *bus1_queue_entry_new(struct bus1_user *user,
+					      size_t n_files);
 struct bus1_queue_entry *bus1_queue_entry_free(struct bus1_queue_entry *entry);
 int bus1_queue_entry_install(struct bus1_queue_entry *entry,
 			     struct bus1_pool *pool);

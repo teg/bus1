@@ -19,6 +19,7 @@
 #include "peer.h"
 #include "pool.h"
 #include "queue.h"
+#include "user.h"
 
 /* lockdep assertion to verify the parent peer is locked */
 #define bus1_queue_assert_held(_queue) \
@@ -283,7 +284,8 @@ struct bus1_queue_entry *bus1_queue_peek(struct bus1_queue *queue)
  *
  * Return: Pointer to slice, ERR_PTR on failure.
  */
-struct bus1_queue_entry *bus1_queue_entry_new(size_t n_files)
+struct bus1_queue_entry *bus1_queue_entry_new(struct bus1_user *user,
+					      size_t n_files)
 {
 	struct bus1_queue_entry *entry;
 
@@ -294,6 +296,7 @@ struct bus1_queue_entry *bus1_queue_entry_new(size_t n_files)
 
 	RB_CLEAR_NODE(&entry->transaction.rb);
 	RB_CLEAR_NODE(&entry->rb);
+	entry->user = bus1_user_ref(user);
 	entry->n_files = n_files;
 
 	return entry;
@@ -324,6 +327,8 @@ bus1_queue_entry_free(struct bus1_queue_entry *entry)
 	for (i = 0; i < entry->n_files; ++i)
 		if (entry->files[i])
 			fput(entry->files[i]);
+
+	bus1_user_release(entry->user);
 
 	WARN_ON(entry->slice);
 	WARN_ON(entry->transaction.peer);

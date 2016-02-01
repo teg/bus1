@@ -321,6 +321,7 @@ error:
 static struct bus1_queue_entry *
 bus1_transaction_instantiate(struct bus1_transaction *transaction,
 			     struct bus1_peer_info *peer_info,
+			     struct bus1_user *user,
 			     u64 peer_id)
 {
 	struct bus1_queue_entry *entry;
@@ -328,7 +329,7 @@ bus1_transaction_instantiate(struct bus1_transaction *transaction,
 	size_t i;
 	int r;
 
-	entry = bus1_queue_entry_new(transaction->n_files);
+	entry = bus1_queue_entry_new(user, transaction->n_files);
 	if (IS_ERR(entry))
 		return ERR_CAST(entry);
 
@@ -415,6 +416,7 @@ static int bus1_transaction_link(struct bus1_transaction *transaction,
 /**
  * bus1_transaction_instantiate_for_id() - instantiate a message
  * @transaction:	transaction to work with
+ * @user:		the user the transaction should be accounted on
  * @peer_id:		destination
  * @flags:		BUS1_SEND_FLAG_* to affect behavior
  *
@@ -427,6 +429,7 @@ static int bus1_transaction_link(struct bus1_transaction *transaction,
  * Return: 0 on success, negative error code on failure.
  */
 int bus1_transaction_instantiate_for_id(struct bus1_transaction *transaction,
+					struct bus1_user *user,
 					u64 peer_id,
 					u64 flags)
 {
@@ -441,6 +444,7 @@ int bus1_transaction_instantiate_for_id(struct bus1_transaction *transaction,
 
 	entry = bus1_transaction_instantiate(transaction,
 					     bus1_peer_dereference(peer),
+					     user,
 					     peer_id);
 	if (IS_ERR(entry)) {
 		r = PTR_ERR(entry);
@@ -591,6 +595,7 @@ void bus1_transaction_commit(struct bus1_transaction *transaction)
 /**
  * bus1_transaction_commit_for_id() - instantiate and commit unicast
  * @transaction:	transaction to use
+ * @user:		the user the transaction should be accounted on
  * @peer_id:		destination ID
  * @flags:		BUS1_CMD_SEND_* flags
  *
@@ -600,6 +605,7 @@ void bus1_transaction_commit(struct bus1_transaction *transaction)
  * Return: 0 on success, negative error code on failure.
  */
 int bus1_transaction_commit_for_id(struct bus1_transaction *transaction,
+				   struct bus1_user *user,
 				   u64 peer_id,
 				   u64 flags)
 {
@@ -617,7 +623,7 @@ int bus1_transaction_commit_for_id(struct bus1_transaction *transaction,
 
 	peer_info = bus1_peer_dereference(peer);
 
-	e = bus1_transaction_instantiate(transaction, peer_info, peer_id);
+	e = bus1_transaction_instantiate(transaction, peer_info, user, peer_id);
 	if (IS_ERR(e)) {
 		r = PTR_ERR(e);
 		e = NULL;

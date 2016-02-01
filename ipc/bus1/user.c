@@ -182,3 +182,17 @@ struct bus1_user *bus1_user_release(struct bus1_user *user)
 
 	return NULL;
 }
+
+/**
+ * bus1_user_ref() - get a reference to the user
+ * @user:	User
+ *
+ * Return: @user
+ */
+struct bus1_user *bus1_user_ref(struct bus1_user *user)
+{
+	if (user)
+		kref_get(&user->ref);
+
+	return user;
+}
