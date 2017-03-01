@@ -305,7 +305,7 @@ struct bus1_message *bus1_factory_instantiate(struct bus1_factory *f,
 	m->n_handles = 0;
 	m->n_handles_charge = f->n_handles;
 	m->n_files = 0;
-	m->slice = NULL;
+	bus1_pool_slice_init(&m->slice);
 	m->files = (void *)(m + 1) + bus1_flist_inline_size(f->n_handles);
 	bus1_flist_init(m->handles, f->n_handles);
 
@@ -315,18 +315,13 @@ struct bus1_message *bus1_factory_instantiate(struct bus1_factory *f,
 			     ALIGN(f->n_handles * sizeof(u64), 8) +
 			     ALIGN(f->n_files * sizeof(int), 8));
 	mutex_lock(&peer->data.lock);
-	m->slice = bus1_pool_alloc(&peer->data.pool, size);
+	r = bus1_pool_alloc(&peer->data.pool, &m->slice, size);
 	mutex_unlock(&peer->data.lock);
-	if (IS_ERR(m->slice)) {
-		bus1_user_discharge(&peer->user->limits.n_slices,
-				    &peer->data.limits.n_slices, 1);
-		r = PTR_ERR(m->slice);
-		m->slice = NULL;
+	if (r < 0)
 		goto error;
-	}
 
 	/* import blob */
-	r = bus1_pool_write_iovec(&peer->data.pool, m->slice, 0, f->vecs,
+	r = bus1_pool_write_iovec(&peer->data.pool, &m->slice, 0, f->vecs,
 				  f->n_vecs, f->length_vecs);
 	if (r < 0)
 		goto error;
@@ -417,14 +412,11 @@ void bus1_message_free(struct kref *k)
 			    &peer->data.limits.n_handles, m->n_handles_charge);
 	bus1_flist_deinit(m->handles, m->n_handles);
 
-	if (m->slice) {
-		mutex_lock(&peer->data.lock);
-		if (!bus1_pool_slice_is_public(m->slice))
-			bus1_user_discharge(&peer->user->limits.n_slices,
-					    &peer->data.limits.n_slices, 1);
-		bus1_pool_release_kernel(&peer->data.pool, m->slice);
-		mutex_unlock(&peer->data.lock);
-	}
+	mutex_lock(&peer->data.lock);
+	bus1_pool_dealloc(&peer->data.pool, &m->slice);
+	mutex_unlock(&peer->data.lock);
+	bus1_user_discharge(&peer->user->limits.n_slices,
+			    &peer->data.limits.n_slices, 1);
 
 	bus1_user_unref(m->user);
 	bus1_handle_unref(m->dst);
@@ -525,7 +517,7 @@ int bus1_message_install(struct bus1_message *m, struct bus1_cmd_recv *param)
 			vec.iov_base = buffer;
 			vec.iov_len = n * sizeof(u64);
 
-			r = bus1_pool_write_kvec(&peer->data.pool, m->slice,
+			r = bus1_pool_write_kvec(&peer->data.pool, &m->slice,
 						 offset, &vec, 1, vec.iov_len);
 			if (r < 0)
 				goto exit;
@@ -550,7 +542,7 @@ int bus1_message_install(struct bus1_message *m, struct bus1_cmd_recv *param)
 		offset = ALIGN(m->n_bytes, 8) +
 			 ALIGN(m->n_handles * sizeof(u64), 8);
 
-		r = bus1_pool_write_kvec(&peer->data.pool, m->slice, offset,
+		r = bus1_pool_write_kvec(&peer->data.pool, &m->slice, offset,
 					 &vec, 1, vec.iov_len);
 		if (r < 0)
 			goto exit;
@@ -568,8 +560,9 @@ int bus1_message_install(struct bus1_message *m, struct bus1_cmd_recv *param)
 	}
 
 	/* publish pool slice */
+	bus1_message_ref(m);
 	mutex_lock(&peer->data.lock);
-	bus1_pool_publish(&peer->data.pool, m->slice);
+	bus1_pool_publish(&m->slice);
 	mutex_unlock(&peer->data.lock);
 
 	/* commit handles */
