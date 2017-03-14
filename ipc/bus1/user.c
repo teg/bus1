@@ -70,6 +70,8 @@ static struct bus1_user_usage *bus1_user_usage_new(void)
 	if (!usage)
 		return ERR_PTR(-ENOMEM);
 
+	mutex_init(&usage->lock);
+
 	return usage;
 }
 
@@ -81,6 +83,7 @@ bus1_user_usage_free(struct bus1_user_usage *usage)
 		WARN_ON(atomic_read(&usage->n_handles));
 		WARN_ON(atomic_read(&usage->n_bytes));
 		WARN_ON(atomic_read(&usage->n_fds));
+		mutex_destroy(&usage->lock);
 		kfree(usage);
 	}
 
@@ -424,6 +427,7 @@ int bus1_user_charge_quota(struct bus1_user *user,
 	if (IS_ERR(usage))
 		return PTR_ERR(usage);
 
+	mutex_lock(&usage->lock);
 	r = bus1_user_charge_quota_one(&limits->n_slices,
 				 atomic_read(&usage->n_slices),
 				 n_slices);
@@ -453,6 +457,8 @@ int bus1_user_charge_quota(struct bus1_user *user,
 	atomic_add(n_bytes, &usage->n_bytes);
 	atomic_add(n_fds, &usage->n_fds);
 
+	mutex_unlock(&usage->lock);
+
 	return 0;
 
 revert_bytes:
@@ -461,6 +467,7 @@ revert_handles:
 	atomic_add(n_handles, &limits->n_handles);
 revert_slices:
 	atomic_add(n_slices, &limits->n_slices);
+	mutex_unlock(&usage->lock);
 	return r;
 }
 

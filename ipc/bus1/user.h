@@ -49,12 +49,14 @@
  * @n_handles:			number of used handles
  * @n_bytes:			number of used bytes
  * @n_fds:			number of used fds
+ * @lock:			object lock
  */
 struct bus1_user_usage {
 	atomic_t n_slices;
 	atomic_t n_handles;
 	atomic_t n_bytes;
 	atomic_t n_fds;
+	struct mutex lock;
 };
 
 /**
